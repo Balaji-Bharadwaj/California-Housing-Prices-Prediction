@@ -1,0 +1,269 @@
+---
+title: "California Housing Prices Prediction - Machine Learning models"
+author: "Balaji Bharadwaj"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Model building
+
+Now that we have a good idea of what the dataset represents, let us begin building the 
+machine learning models for the dataset.
+
+Firstly, I will convert the categorical variable 'ocean_proximity' to a factor variable.
+
+```{r}
+# Loading the required libraries
+library(caret)
+library(forecast)
+
+# Loading the dataset
+housing <- read.csv("C:/Users/Balaji Bharadwaj/Downloads/UB Subjects/Predictive Analytics/Project/housing.csv")
+
+# Converting the ocean_proximity to factor variable
+housing$ocean_proximity <- factor(housing$ocean_proximity)
+
+# Converting the factor variable to numerical using as.numeric() function
+housing$ocean_proximity <- as.numeric(housing$ocean_proximity)
+
+# Displaying the columns and its values
+str(housing)
+```
+
+Now I will normalize the dataset, as there are a wide range of values in different columns of the data.
+```{r}
+# Normalizing the data
+housing_norm <- as.data.frame(scale(housing[,]))
+
+summary(housing_norm)
+```
+
+Let us now divide the dataset into two parts, training data and test data. The training data will be used to 
+train the machine learning models while the test data will be used to validate the outputs of the models.
+
+I will apply a split of 80:20 in favour for the training data.
+
+```{r}
+# Partitioning the data into train set
+set.seed(123)
+train.rows <- sample(rownames(housing_norm), dim(housing_norm)[1]*0.8)
+train.data <- housing_norm[train.rows, ]
+dim(train.data)
+train.data <- train.data[complete.cases(train.data), ]
+dim(train.data)
+
+# Using the remaining data as validation set
+valid.rows <- setdiff(rownames(housing_norm), train.rows) 
+valid.data <- housing_norm[valid.rows, ]
+dim(valid.data)
+valid.data <- valid.data[complete.cases(valid.data), ]
+dim(valid.data)
+
+```
+
+#### Linear Regression model
+
+```{r}
+lm.fit <- train(median_house_value ~ ., data = train.data, method = "lm")
+lm.pred <- predict(lm.fit, newdata = valid.data)
+accuracy(lm.pred, valid.data$median_house_value)
+```
+
+We get the following output: 
+
+ME -  0.002026927
+
+RMSE -  0.596938
+
+MAE - 0.4388365
+
+MPE - 1.375003
+
+MAPE - 209.2251
+
+### Decision Tree model
+
+```{r}
+tree.fit <- train(median_house_value ~ ., data = train.data, method = "rpart")
+tree.pred <- predict(tree.fit, newdata = valid.data)
+accuracy(tree.pred, valid.data$median_house_value)
+```
+
+We get the following output: 
+
+ME -  0.004024319 
+
+RMSE -  0.7932506 
+
+MAE - 0.608548 
+
+MPE - 25.58211 
+
+MAPE - 205.0308
+
+### Random Forest model
+
+```{r}
+library(randomForest)
+rf.fit <- randomForest(median_house_value ~ ., data = train.data, ntree = 500, 
+                   mtry = 4, nodesize = 5, importance = TRUE)
+rf.pred <- predict(rf.fit, valid.data)
+accuracy(rf.pred, valid.data$median_house_value)
+```
+
+We get the following output: 
+
+ME -  -0.008792315  
+
+RMSE -  0.409712  
+
+MAE - 0.2718677 
+
+MPE - 2.206499  
+
+MAPE - 123.2079 
+
+### Gradient Boosting model
+
+```{r}
+library(gbm)
+gbm.fit <- gbm(median_house_value ~ ., data = train.data, n.trees = 1000, interaction.depth = 30, 
+                 shrinkage = 0.01, distribution = "gaussian")
+gbm.pred <- predict(gbm.fit, valid.data)
+accuracy(gbm.pred, valid.data$median_house_value)
+```
+
+We get the following output: 
+
+ME -  -0.008884099    
+
+RMSE -  0.404215 
+
+MAE - 0.2733096   
+
+MPE - 12.57167   
+
+MAPE - 115.8014 
+
+### Support Vector Machine model
+
+```{r}
+library(e1071)
+svm.fit <- svm(median_house_value ~ ., data = train.data)
+svm.pred <- predict(svm.fit, newdata = valid.data)
+accuracy(svm.pred, valid.data$median_house_value)
+```
+
+We get the following output: 
+
+ME -  0.06017964    
+
+RMSE -  0.4849925 
+
+MAE - 0.3234164   
+
+MPE - 13.58387     
+
+MAPE - 156.8627 
+
+### Neural Networks model
+
+```{r}
+library(nnet)
+nn.fit <- nnet(median_house_value ~ ., data = train.data, size = 20, decay = 0.001)
+nn.pred <- predict(nn.fit, newdata = valid.data)
+nn.pred_vec <- as.vector(nn.pred)
+accuracy(nn.pred_vec, valid.data$median_house_value)
+```
+
+We get the following output: 
+
+ME -  -0.2121092    
+
+RMSE -  0.8147166  
+
+MAE - 0.6745083   
+
+MPE - 98.70444     
+
+MAPE - 142.9736  
+
+We can further perform cross validation to figure out the most optimized hyperparameters
+
+```{r}
+# Defining tuning grid giving values of size of layers and decay
+tune.grid <- expand.grid(size = c(5, 10, 15, 20),
+                         decay = c(0.001, 0.01, 0.1))
+
+# Training model with cross-validation
+ctrl <- trainControl(method = "cv", number = 5)
+set.seed(123)
+nn.fit <- train(median_house_value ~ ., data = train.data, method = "nnet",
+                trControl = ctrl, tuneGrid = tune.grid)
+
+# Printing best model
+print(nn.fit$bestTune)
+```
+
+After performing cross validation, we have obtained the optimized size to be 20 and decay to be	0.1.
+
+We can now use this model get the various metrics.
+
+```{r}
+# Making predictions on validation data
+nn.pred <- predict(nn.fit, newdata = valid.data)
+nn.pred_vec <- as.vector(nn.pred)
+accuracy(nn.pred_vec, valid.data$median_house_value)
+```
+
+We get the following output: 
+
+ME -  -0.2489186     
+
+RMSE -  0.7766022   
+
+MAE - 0.639867    
+
+MPE - 70.55791      
+
+MAPE - 141.4097
+
+
+Let us now visualize the results obtained. In particular, let us look at each model's RMSE values.
+
+```{r}
+# Loading the required libraries
+library(ggplot2)
+
+# Creating a data frame with model names and their corresponding RMSE values
+model_names <- c("Linear Regression", "Decision Trees", "Random Forest", "Gradient Boosting", "Neural Networks", "Support Vector Machine")
+rmse_values <- c(0.596938, 0.7932506, 0.409712, 0.404215, 0.7766022, 0.4849925)
+data <- data.frame(Model = model_names, RMSE = rmse_values)
+
+# Creating a bar graph using ggplot2
+ggplot(data, aes(x = Model, y = RMSE)) + 
+  geom_bar(stat = "identity", fill = "steelblue") + 
+  labs(title = "Comparison of RMSE Values for Various Models",
+       x = "Model",
+       y = "RMSE") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 0.5))
+```
+
+### Conclusion
+
+Thus in conclusion, we can say that Random Forest and Gradient Boosting models both are the most accurate algorithms for predicting housing prices for this dataset.
+
+This study is important because it shows that machine learning algorithms can be used to
+predict housing prices. This information can be used by real estate agents, investors, and
+other people who are interested in the housing market.
+
+There are a number of things that we could do to improve the study. Firstly, we could use a
+larger dataset of housing prices. This would allow us to train our machine learning algorithms
+on more data, which would improve their accuracy. Secondly, we could use other different machine
+learning algorithms. There are many different machine learning algorithms available, and
+some of them may be more accurate than the Gradient Boosting algorithm that we used.
+

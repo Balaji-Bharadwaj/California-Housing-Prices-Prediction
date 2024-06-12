@@ -1,7 +1,7 @@
 ---
 title: "California Housing Prices Prediction - Data Visualization"
 author: "Balaji Bharadwaj"
-output: html_document
+output: rmarkdown::github_document
 ---
 
 ```{r setup, include=FALSE}
